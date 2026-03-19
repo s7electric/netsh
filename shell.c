@@ -1,26 +1,36 @@
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include "shell.h"
+#include "dir.h"
 #define MAXARGLEN 30
 #define MAXARGS 15
 #define MAXLINE ((MAXARGLEN+1) * MAXARGS) //+1 for spaces
 
 int main(int argc, char** argv) {
+
+	char directory[256];
+	if (-1 == pwd(directory, 256)) {
+		fprintf(stderr, "Failed to obtain working directory");
+	}
+
 	int stop = 1;
 	while (stop == 1) {
-		printf("\n$>");
+		printf("\n%s $>", directory);
 		char input[MAXLINE];
 		fgets(input, MAXLINE, stdin);
+		if (!strcmp(input, "\n")) continue;
 		int argc2;
-		char** argv2 = getargs(input, &argc2);
+		char** argv2 = getwords(input, &argc2);
 		if (argv2 == NULL) {
 			fprintf(stderr, "Failed to parse arguments");
+			continue;
 		}
 		int proc = createProcess(argc2, argv2);
 		if (proc == -1) {
-			fprintf(stderr, "Failed to create child process");
+			fprintf(stderr, "Failed to start process");
 			continue;
 		}
 		// for (int i = 0; i < argc2; i++) {
@@ -34,26 +44,28 @@ int main(int argc, char** argv) {
 	}
 }
 
-char** getargs(char* input, int* argc) {
-	*argc = 0;
+char** getwords(char* inputstr, int* count) {
+	*count = 0;
 	char** argv2 = malloc(sizeof(char*) * MAXARGS);
 
 	int i = 0,arglen = 0;
 
-	while (input[i] != '\0' && *argc <= MAXARGS && i < MAXLINE) {
-		while (input[i] != ' ' && input[i] != '\n') {
+	while (inputstr[i] != '\0' && *count <= MAXARGS && i < MAXLINE) {
+		while (inputstr[i] != ' ' && inputstr[i] != '\n') {
 			i++;
 			arglen++;
 		}
-		argv2[*argc] = malloc(sizeof(char) * (arglen+1));
+		argv2[*count] = malloc(sizeof(char) * (arglen+1));
 		for (int k = 0; k < arglen; k++) {
-			argv2[*argc][k] = input[i-arglen+k];
+			argv2[*count][k] = inputstr[i-arglen+k];
 		}
-		argv2[*argc][arglen] = '\0';
+		argv2[*count][arglen] = '\0';
 		arglen = 0;
-		*argc += 1;
-		while (input[i] == ' ') i++; //consume spaces between args
-		if (input[i] == '\n') break; //remove this later to add multiline commands
+
+
+		*count += 1;
+		while (inputstr[i] == ' ') i++; //consume spaces between args
+		if (inputstr[i] == '\n') break; //remove this later to add multiline commands
 	}
 	return argv2;
 }
@@ -69,7 +81,10 @@ int createProcess(int argc, char** argv) {
 		wait(&status); //what
 	}
 	else if (pid == 0) {
-		execvp(argv[0], argv);
+		if (-1 == execvp(argv[0], argv)) {
+			perror("execvp");
+			return -1;
+		}
 		exit(0);
 	}
 	return status;
