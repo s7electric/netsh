@@ -1,8 +1,10 @@
+#include <bits/posix1_lim.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <linux/limits.h>
 #include "shell.h"
 #include "dir.h"
 #define MAXARGLEN 30
@@ -11,14 +13,21 @@
 
 int main(int argc, char** argv) {
 
-	char directory[256];
-	if (-1 == pwd(directory, 256)) {
-		fprintf(stderr, "Failed to obtain working directory");
-	}
+	char directory[PATH_MAX];
+	char hostname[HOST_NAME_MAX];
+	// if (-1 == pwd(directory, 256)) {
+	// 	fprintf(stderr, "Failed to obtain working directory");
+	// }
 
 	int stop = 1;
 	while (stop == 1) {
-		printf("\n%s $>", directory);
+		if (NULL == getcwd(directory, sizeof(directory))) {
+			perror("cwd");
+		}
+		if (-1 == gethostname(hostname, HOST_NAME_MAX)) {
+			perror("gethostname");
+		}
+		printf("\n[%s] $>", directory);
 		char input[MAXLINE];
 		fgets(input, MAXLINE, stdin);
 		if (!strcmp(input, "\n")) continue;
@@ -26,6 +35,9 @@ int main(int argc, char** argv) {
 		char** argv2 = getwords(input, &argc2);
 		if (argv2 == NULL) {
 			fprintf(stderr, "Failed to parse arguments");
+			continue;
+		}
+		if (executeCommand(argc2, argv2, directory) == 0) {
 			continue;
 		}
 		int proc = createProcess(argc2, argv2);
@@ -43,6 +55,10 @@ int main(int argc, char** argv) {
 		free(argv2);
 	}
 }
+
+
+
+
 
 char** getwords(char* inputstr, int* count) {
 	*count = 0;
@@ -88,4 +104,26 @@ int createProcess(int argc, char** argv) {
 		exit(0);
 	}
 	return status;
+}
+
+int executeCommand(int argc, char **argv, char* directory) {
+	//fix this later
+	if (!strcmp(argv[0], "cd")) {
+		if (argc == 1) {
+			//handle cd to home
+			return 0;
+		}
+		else if (argc == 2) {
+			if (-1 == chdir(argv[1])) {
+				perror("chdir");
+				return 1;
+			}
+			return 0;
+		}
+		else {
+			fprintf(stderr, "cd: usage: cd [directory]");
+			return 0;
+		}
+	}
+	return 1;
 }

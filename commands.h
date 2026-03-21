@@ -1,7 +1,11 @@
-#ifndef COMMANDS_H
-#define COMMANDS_H
+// #ifndef COMMANDS_H
+// #define COMMANDS_H
 
-int cd(char*, char*);
-int quit();
+// int cd(char*, char*);
 
-#endif
+// /*
+// Quit the current shell process.
+// */
+// int quit();
+
+// #endif

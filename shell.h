@@ -1,7 +1,11 @@
 #ifndef SHELLH
 #define SHELLH
 
-char* choosearg(char*);
+/*
+Check the cmdline argument list for built in shell commands from the given directory.
+-> 0 if success or error, 1 if failure
+*/
+int executeCommand(int argc, char** argv, char* directory);
 
 /*
 Create a list of individual space separated words from input and store count in *count.
