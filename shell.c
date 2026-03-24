@@ -1,4 +1,3 @@
-#include <bits/posix1_lim.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,68 +5,15 @@
 #include <sys/wait.h>
 #include <linux/limits.h>
 #include "shell.h"
-#include "dir.h"
-#define MAXARGLEN 30
-#define MAXARGS 15
-#define MAXLINE ((MAXARGLEN+1) * MAXARGS) //+1 for spaces
 
-int main(int argc, char** argv) {
-
-	char directory[PATH_MAX];
-	char hostname[HOST_NAME_MAX];
-	// if (-1 == pwd(directory, 256)) {
-	// 	fprintf(stderr, "Failed to obtain working directory");
-	// }
-
-	int stop = 1;
-	while (stop == 1) {
-		if (NULL == getcwd(directory, sizeof(directory))) {
-			perror("cwd");
-		}
-		if (-1 == gethostname(hostname, HOST_NAME_MAX)) {
-			perror("gethostname");
-		}
-		printf("\n[%s] $>", directory);
-		char input[MAXLINE];
-		fgets(input, MAXLINE, stdin);
-		if (!strcmp(input, "\n")) continue;
-		int argc2;
-		char** argv2 = getwords(input, &argc2);
-		if (argv2 == NULL) {
-			fprintf(stderr, "Failed to parse arguments");
-			continue;
-		}
-		if (executeCommand(argc2, argv2, directory) == 0) {
-			continue;
-		}
-		int proc = createProcess(argc2, argv2);
-		if (proc == -1) {
-			fprintf(stderr, "Failed to start process");
-			continue;
-		}
-		// for (int i = 0; i < argc2; i++) {
-		// 	printf("arg%d: %s\n", i, argv2[i]);
-		// }
-		//free everything for next prompt
-		for (int i = 0; i < argc2; i++) {
-			free(argv2[i]);
-		}
-		free(argv2);
-	}
-}
-
-
-
-
-
-char** getwords(char* inputstr, int* count) {
+char** getwords(char* inputstr, int* count, char delim) {
 	*count = 0;
 	char** argv2 = malloc(sizeof(char*) * MAXARGS);
 
 	int i = 0,arglen = 0;
 
 	while (inputstr[i] != '\0' && *count <= MAXARGS && i < MAXLINE) {
-		while (inputstr[i] != ' ' && inputstr[i] != '\n') {
+		while (inputstr[i] != delim && inputstr[i] != '\n') {
 			i++;
 			arglen++;
 		}
@@ -80,7 +26,7 @@ char** getwords(char* inputstr, int* count) {
 
 
 		*count += 1;
-		while (inputstr[i] == ' ') i++; //consume spaces between args
+		while (inputstr[i] == delim) i++; //consume spaces between args
 		if (inputstr[i] == '\n') break; //remove this later to add multiline commands
 	}
 	return argv2;
