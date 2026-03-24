@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
 		fgets(input, MAXLINE, stdin);
 		if (!strcmp(input, "\n")) continue;
 		int argc2;
-		char** argv2 = getwords(input, &argc2);
+		char** argv2 = getwords(input, &argc2, ' ');
 		if (argv2 == NULL) {
 			fprintf(stderr, "Failed to parse arguments");
 			continue;
