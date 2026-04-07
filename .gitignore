@@ -1,3 +1,8 @@
-*.o
-*.elf
+*
+
+# General allowances
+!*.*
+!*/*
+
+# Special denials
 /tex/*
