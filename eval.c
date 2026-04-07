@@ -1,5 +1,6 @@
 #define _GNU_SOURCE // for fcntl changing pipe size to system max
 #include "eval.h"
+#include "command.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,10 +11,12 @@
 #include <fcntl.h>
 
 #define try(func) if (-1 == (func)) {perror(#func); goto ERROR;}
+#define err(cause) {perror(#cause); goto ERROR;}
 
 
 char* eval(char* expr) {
 	char* out = malloc(sizeof(char) * getPipeMax());
+	if (out == NULL) err(malloc)
 	/*
 	1. tokenize expr
 	2. if subevaluations are found then strip ?() and recurseively replace word with evaluation
@@ -34,6 +37,13 @@ char* eval(char* expr) {
 			words[i] = eval(subexpr);
 			// ^ THIS MAY CAUSE PROBLEMS SINCE THE EVALUATION MIGHT RESULT IN MULTIPLE TOKENS, WHICH WILL NOT BE ACCOUNTED FOR
 		}
+	}
+
+	// try built-in commands
+	if (0 == executeCommand(count, words)) {
+		freewords(words, count);
+		free(out);
+		return NULL;
 	}
 
 	// 3: we should have a string with no subevaluations left (this is like the base case) e.g. "ls | grep ... | wc"
@@ -78,7 +88,6 @@ char* eval(char* expr) {
 	while (first != NULL) {
 		try(pid = fork())
 		if (pid == 0) { // child (actual program)
-
 			// close all unused fds
 			// try(close(mainpipe[0]))
 			while (last != NULL) { // why did I implement this even; it's currently 9:14pm april 6th
@@ -121,16 +130,12 @@ char* eval(char* expr) {
 			goto ERROR;
 		}
 	}
-	// tcsetpgrp(STDIN_FILENO, getpgrp());
 	// write results to output buffer
-	if (out == NULL) return NULL;
 	int bytestotal = 0;
 	int bytesread;
 	do {
 		bytesread = read(mainpipe[0], out+bytestotal, 1024); // 1024 because I think it's reasonable
-		if (bytesread == -1) {
-			goto ERROR;
-		}
+		if (bytesread == -1) err(read);
 		bytestotal += bytesread;
 	}
 	while (bytesread != 0);

@@ -1,4 +1,5 @@
 #include "eval.h"
+#include "command.h"
 #include <bits/posix1_lim.h>
 #include <string.h>
 #include <stdio.h>
@@ -17,17 +18,18 @@ int main(int argc, char** argv) {
 		if (-1 == gethostname(hostname, HOST_NAME_MAX)) {
 			perror("gethostname");
 		}
-		printf("\n[%s][%s] %c>", hostname, directory, EVALCHR);
+		printf("[%s][%s] %c>", hostname, directory, EVALCHR);
 
 		char input[MAXLINE];
 		fgets(input, MAXLINE, stdin);
 		if (!strcmp(input, "\n")) continue; // expand this to actually work based on real functionality and not special cases
 		int argc2;
 
-		// I want something like this
 		input[strlen(input)] = '\0';
 		char* output = eval(input);
-		printf("\n%s", output);
+		if (output != NULL) {
+			printf("%s", output);
+		}
 		free(output);
 	}
 }

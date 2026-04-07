@@ -1,18 +1,18 @@
 FLAGS = -Wall -g
-OBJECTS = netsh.o eval.o command.o
-NAME = netsh.elf
-TEST = test.elf
+OBJECTS = eval.o command.o
+NAME = netsh
+TEST = test
 
 all: $(NAME) $(TEST)
 
-$(NAME): $(OBJECTS)
+$(NAME): $(OBJECTS) $(NAME).o
 	gcc $(FLAGS) $^ -o $(NAME)
 
 %.o: %.c %.h
 	gcc $(FLAGS) -c $< -o $@
 
-$(TEST): test.c eval.c
-	gcc $(FLAGS) -o $(TEST) test.c eval.c
+$(TEST): $(OBJECTS) test.c
+	gcc $(FLAGS) $^ -o $(TEST)
 
 clean:
-	rm *.o *.elf
+	rm *.o $(NAME) $(TEST)

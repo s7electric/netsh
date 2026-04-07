@@ -1,7 +1,7 @@
+#include "command.h"
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
-#include "command.h"
 
 int executeCommand(int argc, char **argv) {
 	if (!strcmp(argv[0], "cd")) {
@@ -12,7 +12,7 @@ int executeCommand(int argc, char **argv) {
 		else if (argc == 2) {
 			if (-1 == chdir(argv[1])) {
 				perror("chdir");
-				return 1;
+				return -1;
 			}
 			return 0;
 		}
@@ -21,6 +21,6 @@ int executeCommand(int argc, char **argv) {
 			return -1;
 		}
 	}
-	fprintf(stderr, "netsh: command %s not found", argv[0]);
-	return 1;
+	// fprintf(stderr, "netsh: command %s not found", argv[0]);
+	return -1;
 }

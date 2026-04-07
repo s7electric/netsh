@@ -6,3 +6,4 @@
 
 # Special denials
 /tex/*
+*.o
