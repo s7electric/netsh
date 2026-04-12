@@ -1,5 +1,6 @@
+#include "netsh.h"
 #include "eval.h"
-#include "command.h"
+
 #include <bits/posix1_lim.h>
 #include <string.h>
 #include <stdio.h>
@@ -20,16 +21,18 @@ int main(int argc, char** argv) {
 		}
 		printf("[%s][%s] %c>", hostname, directory, EVALCHR);
 
-		char input[MAXLINE];
-		fgets(input, MAXLINE, stdin);
-		if (!strcmp(input, "\n")) continue; // expand this to actually work based on real functionality and not special cases
-		int argc2;
+		char* expr = malloc(sizeof(char) * MAXLINE);
+		fgets(expr, MAXLINE, stdin);
+		if (!strcmp(expr, "\n")) continue; // expand this to actually work based on real functionality and not special cases
+		expr[strlen(expr)] = '\0';
 
-		input[strlen(input)] = '\0';
-		char* output = eval(input);
-		if (output != NULL) {
-			printf("%s", output);
+		eval(&expr);
+		if (expr != NULL) {
+			printf("%s", expr);
 		}
-		free(output);
+		else {
+			fprintf(stderr, "netsh: error parsing expr");
+		}
+		free(expr);
 	}
 }

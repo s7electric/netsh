@@ -1,6 +1,8 @@
-#define _GNU_SOURCE // for fcntl changing pipe size to system max
+#include "netsh.h"
 #include "eval.h"
+#include "queue.h"
 #include "command.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,13 +12,14 @@
 #include <linux/limits.h>
 #include <fcntl.h>
 
+#define _GNU_SOURCE // for fcntl changing pipe size to system max
+
 #define try(func) if (-1 == (func)) {perror(#func); goto ERROR;}
 #define err(cause) {perror(#cause); goto ERROR;}
 
 
-char* eval(char* expr) {
+void eval(char** expr) {
 	char* out = malloc(sizeof(char) * getPipeMax());
-	if (out == NULL) err(malloc)
 	/*
 	1. tokenize expr
 	2. if subevaluations are found then strip ?() and recurseively replace word with evaluation
@@ -25,16 +28,15 @@ char* eval(char* expr) {
 	*/
 	// 1
 	int count;
-	char** words = getwords(expr, &count, ' ');
+	char** words = getwords(*expr, &count, ' ');
 	// 2: this is like the recursive case
 	for (int i = 0; i < count; i++) {
 		if (words[i][0] == EVALCHR) {
 			char subexpr[strlen(words[i])-2]; // -2 for the ?() and enough for \0
 			strncpy(subexpr, &words[i][2], strlen(words[i])-3); // strip ?()
-			subexpr[strlen(words[i]) - 3] = '\n';
+			// subexpr[strlen(words[i]) - 3] = '\n';
 			subexpr[strlen(words[i]) - 2] = '\0';
-			free(words[i]);
-			words[i] = eval(subexpr);
+			eval(&words[i]);
 			// ^ THIS MAY CAUSE PROBLEMS SINCE THE EVALUATION MIGHT RESULT IN MULTIPLE TOKENS, WHICH WILL NOT BE ACCOUNTED FOR
 		}
 	}
@@ -42,47 +44,28 @@ char* eval(char* expr) {
 	// try built-in commands
 	if (0 == executeCommand(count, words)) {
 		freewords(words, count);
-		free(out);
-		return NULL;
+		return;
 	}
 
-	// 3: we should have a string with no subevaluations left (this is like the base case) e.g. "ls | grep ... | wc"
-	pipejobqueue* last = malloc(sizeof(pipejobqueue));
-	pipejobqueue* first = last;
-	first->fdin = STDIN_FILENO;
-	first->prev = NULL;
-	first->next = NULL;
-	first->argc = 0;
-	for (int i = 0; i < count; i++) {
-		if (0 != strcmp(words[i], "|")) { // if not pipe
-			last->argv[last->argc] = calloc((MAXARGLEN+1), sizeof(char));
-			strncpy(last->argv[last->argc], words[i], MAXARGLEN);
-			last->argv[last->argc][MAXARGLEN] = '\0';
-			last->argc++;
-		}
-		// else if redirection operators TBD
-		else { // if we encounter a pipe
-			last->argv[last->argc] = NULL;
-			// advance the queue pointer and assemble pipes
-			int p[2];
-			try(pipe(p))
-			setPipeMax(p[1]);
-			pipejobqueue* new = malloc(sizeof(pipejobqueue));
-			new->fdin = p[0];
-			new->prev = last;
-			new->next = NULL;
-			new->argc = 0;
-
-			last->next = new;
-			last->fdout = p[1];
-			last = new;
-		}
-	}
-	last->argv[last->argc] = NULL; // terminate final program argument list for exec()
-
+	// 3: we should have a string with no subevaluations left (this is like the base case) e.g. "ls | grep ... | wc > file"
 	int mainpipe[2];
 	try(pipe(mainpipe))
-	last->fdout = mainpipe[1];
+	pipejobqueue* pq = createQueue(mainpipe[1]);
+	char* tempargs[MAXARGS];
+	int argcounter = 0;
+	for (int i = 0; i < count; i++) {
+		if (0 != strcmp(words[i], "|")) { // if not pipe
+			tempargs[argcounter] = words[i];
+			argcounter++;
+		}
+		// else if redirection operators TBD
+		else { // if pipe
+			tempargs[argcounter] = NULL;
+			if (-1 == enqueue(pq, argcounter, tempargs)) goto ERROR;
+			argcounter = 0;
+		}
+	}
+
 	// job fork sequence
 	int pid;
 	while (first != NULL) {
@@ -139,12 +122,16 @@ char* eval(char* expr) {
 		bytestotal += bytesread;
 	}
 	while (bytesread != 0);
-	return out;
+	try(close(mainpipe[0]))
+
+	// End: reallocate string
+	char* p = *expr; // temp
+	*expr = out;
+	free(p);
 	ERROR:
-	//free everything
+	// free everything
 	// free previous element FIX
-	free(out);
-	return NULL;
+	return;
 }
 
 int getPipeMax() {
