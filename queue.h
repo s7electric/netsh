@@ -11,7 +11,7 @@ pipejobqueue* createQueue(int fdoutfinal);
 
 int enqueue(pipejobqueue* pq, int argc, char* argv[]);
 
-int execute(pipejobqueue* pq);
+int executejob(pipejobqueue* pq);
 
 int filein(pipejobqueue* pq, int fd);
 

@@ -82,7 +82,34 @@ int enqueue(pipejobqueue* pq, int argc, char* argv[]) {
     return -1;
 }
 
-int execute(pipejobqueue* pq);
+int executejob(pipejobqueue* pq) {
+
+    while (pq->ready) {
+
+        int pid = fork();
+        if (pid == 0) {
+            dup2(pq->ready->fdin, STDIN_FILENO);
+            dup2(pq->ready->fdout, STDOUT_FILENO);
+
+            if (-1 == execvp(pq->ready->argv[0], pq->ready->argv)) {
+                goto EXEC_FAIL;
+            }
+        }
+        else if (pid > 0) {
+
+        }
+        else {
+            goto FORK_FAIL;
+        }
+
+        pq->ready = pq->ready->next;
+    }
+
+    return 0;
+    EXEC_FAIL:
+    FORK_FAIL:
+    return -1;
+}
 
 int filein(pipejobqueue* pq, int fd);
 
