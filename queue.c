@@ -6,6 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#define err(cause, GOTO) {perror(#cause); goto GOTO;}
+
 struct pipejobqueue {
     struct job* ready;
     struct job* end;
@@ -35,7 +37,7 @@ int enqueue(pipejobqueue* pq, int argc, char* argv[]) {
     if (!jb) goto FREE_JOB;
 
     jb->argc = argc;
-    jb->argv = malloc(sizeof(char*) * argc);
+    jb->argv = malloc(sizeof(char*) * (argc+1));
     if (!jb->argv) goto FREE_ARGV;
 
     // allocate space for arguments
@@ -44,6 +46,7 @@ int enqueue(pipejobqueue* pq, int argc, char* argv[]) {
         if (!jb->argv[i]) goto FREE_WORDS;
         strncpy(jb->argv[i], argv[i], MAXARGLEN);
     }
+    jb->argv[argc] = NULL;
 
     if (pq->ready == NULL) { // this is the first job
         pq->ready = jb;
@@ -90,9 +93,6 @@ int executejob(pipejobqueue* pq) {
     if (!pq->ready) goto EMPTY_FAIL;
     int pid = fork();
     if (pid == 0) {
-        dup2(pq->ready->fdin, STDIN_FILENO);
-        dup2(pq->ready->fdout, STDOUT_FILENO);
-
         /* we walk up from the end for no particular reason:
         we just use the existing reference chain to our advantage */
         while (pq->end) {
@@ -103,9 +103,11 @@ int executejob(pipejobqueue* pq) {
             pq->end = pq->end->prev;
         }
 
+        dup2(pq->ready->fdin, STDIN_FILENO);
+        dup2(pq->ready->fdout, STDOUT_FILENO);
+
         execvp(pq->ready->argv[0], pq->ready->argv);
-        // if exec fails we get here:
-        goto EXEC_FAIL;
+        exit(1);
     }
     else if (pid > 0) {
         close(pq->ready->fdin);
@@ -117,19 +119,11 @@ int executejob(pipejobqueue* pq) {
     // free job?
     return pid;
 
-    EXEC_FAIL:
-    // 
-    exit(1);
-
     FORK_FAIL:
     return FORK_ERR;
 
     EMPTY_FAIL:
     return EMPTY_ERR;
 }
-
-int filein(pipejobqueue* pq, int fd);
-
-int fileout(pipejobqueue* pq, int fd);
 
 int freeQueue(pipejobqueue* pv);

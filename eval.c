@@ -1,9 +1,9 @@
+#define _GNU_SOURCE // for fcntl changing pipe size to system max
+
 #include "netsh.h"
 #include "eval.h"
 #include "queue.h"
 #include "command.h"
-
-#define _GNU_SOURCE // for fcntl changing pipe size to system max
 
 #include <string.h>
 #include <stdio.h>
@@ -14,28 +14,18 @@
 #include <linux/limits.h>
 #include <fcntl.h>
 
+#define err(cause, GOTO) {perror(#cause); goto GOTO;}
 
-#define try(func) if (-1 == (func)) {perror(#func); goto ERROR;}
-#define err(cause) {perror(#cause); goto ERROR;}
-
-
-void eval(char** expr) {
+int eval(char** expr) {
 	char* out = malloc(sizeof(char) * getPipeMax());
-	/*
-	1. tokenize expr
-	2. if subevaluations are found then strip ?() and recurseively replace word with evaluation
-	3. look for pipes etc ???
-	4. return the evaluated line
-	*/
-	// 1
+
 	int count;
 	char** words = getwords(*expr, &count, ' ');
-	// 2: this is like the recursive case
+	/* this is like the recursive case */
 	for (int i = 0; i < count; i++) {
 		if (words[i][0] == EVALCHR) {
 			char subexpr[strlen(words[i])-2]; // -2 for the ?() and enough for \0
 			strncpy(subexpr, &words[i][2], strlen(words[i])-3); // strip ?()
-			// subexpr[strlen(words[i]) - 3] = '\n';
 			subexpr[strlen(words[i]) - 2] = '\0';
 			eval(&words[i]);
 			// ^ THIS MAY CAUSE PROBLEMS SINCE THE EVALUATION MIGHT RESULT IN MULTIPLE TOKENS, WHICH WILL NOT BE ACCOUNTED FOR
@@ -45,12 +35,12 @@ void eval(char** expr) {
 	// try built-in commands
 	if (0 == executeCommand(count, words)) {
 		freewords(words, count);
-		return;
+		return SHELL_CMD_ERR;
 	}
 
-	// 3: we should have a string with no subevaluations left (this is like the base case) e.g. "ls | grep ... | wc > file"
+	/* we should have a string with no subevaluations left (this is like the base case) e.g. "ls | grep ... | wc > file" */
 	int mainpipe[2];
-	try(pipe(mainpipe))
+	if (-1 == pipe(mainpipe)) err(pipe, PIPE_FAIL);
 	pipejobqueue* pq = createQueue(mainpipe[1]);
 	char* tempargs[MAXARGS];
 	int argcounter = 0;
@@ -71,7 +61,7 @@ void eval(char** expr) {
 
 	// job fork sequence
 	int pid = 0;
-	while (0 == (pid = executejob(pq)));
+	while (EMPTY_ERR != (pid = executejob(pq)));
 
 	int status;
 	waitpid(pid, &status, 0);
@@ -85,23 +75,36 @@ void eval(char** expr) {
 	int bytesread;
 	do {
 		bytesread = read(mainpipe[0], out+bytestotal, 1024); // 1024 because I think it's reasonable
-		if (bytesread == -1) err(read);
+		if (bytesread == -1) err(read, READ_FAIL);
 		bytestotal += bytesread;
 	}
 	while (bytesread != 0);
+	out[bytestotal] = '\0';
 	
-	try(close(mainpipe[0]))
+	if (-1 == close(mainpipe[0])) err(close, CLOSE_FAIL)
 
-	// End: reallocate string
-	char* p = *expr; // temp
+	char* temp = realloc(out, sizeof(char)*strlen(out));
+	if (!temp) err(realloc, MEM_FAIL);
+	out = temp;
+
+	free(*expr);
 	*expr = out;
-	free(p);
+	return 0;
+
 	CHILD_ERROR:
 	fprintf(stderr, "child exited with status: %d\n", WEXITSTATUS(status));
+
+	MEM_FAIL:
+
+	CLOSE_FAIL:
+
+	READ_FAIL:
+
 	ERROR:
+	PIPE_FAIL:
+	return -1;
 	// free everything
 	// free previous element FIX
-	return;
 }
 
 int getPipeMax() {

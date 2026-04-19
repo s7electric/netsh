@@ -21,7 +21,7 @@ Perform in-text replacement by evaluating the shell input.
 *expr will be freed and **expr will point to the result of the evaluation.
 expr: address of string to evaluate as if it had been typed into the shell.
 */
-void eval(char** expr);
+int eval(char** expr);
 
 /*
 Set the size of pipe fd to the system maximum.

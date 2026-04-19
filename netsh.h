@@ -6,4 +6,11 @@
 #define MAXLINE ((MAXARGLEN+1) * MAXARGS) //+1 for spaces
 #define EVALCHR '$'
 
+#define SHELL_CMD_ERR -67
+
+typedef struct {
+	char* key;
+	int (*value)(int, char**);
+} Cmdtable;
+
 #endif // netsh_h
