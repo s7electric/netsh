@@ -5,6 +5,11 @@
 #include "netsh.h"
 #endif
 
+#define MEM_ERR -2
+#define PIPE_ERR -3
+#define FORK_ERR -4
+#define EMPTY_ERR -5
+
 typedef struct pipejobqueue pipejobqueue;
 
 pipejobqueue* createQueue(int fdoutfinal);

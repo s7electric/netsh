@@ -3,6 +3,8 @@
 #include "queue.h"
 #include "command.h"
 
+#define _GNU_SOURCE // for fcntl changing pipe size to system max
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,7 +14,6 @@
 #include <linux/limits.h>
 #include <fcntl.h>
 
-#define _GNU_SOURCE // for fcntl changing pipe size to system max
 
 #define try(func) if (-1 == (func)) {perror(#func); goto ERROR;}
 #define err(cause) {perror(#cause); goto ERROR;}
@@ -65,52 +66,18 @@ void eval(char** expr) {
 			argcounter = 0;
 		}
 	}
+	tempargs[argcounter] = NULL;
+	if (-1 == enqueue(pq, argcounter, tempargs)) goto ERROR;
 
 	// job fork sequence
-	int pid;
-	while (first != NULL) {
-		try(pid = fork())
-		if (pid == 0) { // child (actual program)
-			// close all unused fds
-			// try(close(mainpipe[0]))
-			while (last != NULL) { // why did I implement this even; it's currently 9:14pm april 6th
-				if (last == first) { // close all the pipe fds from only the other programs
-				}
-				else if (last->fdin == STDIN_FILENO) {
-					if (-1 == close(last->fdout)) {
-						fprintf(stderr, "here\n");
-					}
-				}
-				else {
-					if (-1 == close(last->fdin)) {
-						fprintf(stderr, "here\n");
-					}
-					try(close(last->fdout))
-				}
-				last = last->prev;
-			}
-			try(dup2(first->fdin, STDIN_FILENO))
-			try(dup2(first->fdout, STDOUT_FILENO))
-			// execute this program in the chain
-			execvp(first->argv[0], first->argv);
-			exit(1);
-		}
-		first = first->next;
-	}
-	// close open pipe fds in parent
-	while (last != NULL) { // walk back up the queue to close and free everything
-		if (last->fdin != STDIN_FILENO) {
-			try(close(last->fdin))
-		}
-		try(close(last->fdout))
-		last = last->prev;
-	}
+	int pid = 0;
+	while (0 == (pid = executejob(pq)));
 
 	int status;
 	waitpid(pid, &status, 0);
 	if (WIFEXITED(status)) {
 		if (WEXITSTATUS(status) != 0) {
-			goto ERROR;
+			goto CHILD_ERROR;
 		}
 	}
 	// write results to output buffer
@@ -122,12 +89,15 @@ void eval(char** expr) {
 		bytestotal += bytesread;
 	}
 	while (bytesread != 0);
+	
 	try(close(mainpipe[0]))
 
 	// End: reallocate string
 	char* p = *expr; // temp
 	*expr = out;
 	free(p);
+	CHILD_ERROR:
+	fprintf(stderr, "child exited with status: %d\n", WEXITSTATUS(status));
 	ERROR:
 	// free everything
 	// free previous element FIX

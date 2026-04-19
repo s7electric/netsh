@@ -55,7 +55,7 @@ int enqueue(pipejobqueue* pq, int argc, char* argv[]) {
         int p[2];
         if (-1 == pipe(p)) {
             perror("pipe");
-            return -1;
+            goto PIPE_FAIL;
         }
         // update file descriptors
         pq->end->fdout = p[1];
@@ -68,6 +68,7 @@ int enqueue(pipejobqueue* pq, int argc, char* argv[]) {
         pq->end = jb;
     }
     return 0;
+
     FREE_WORDS:
     for (int i = 0; jb->argv[i] != NULL; i++) {
         free(jb->argv[i]);
@@ -79,36 +80,52 @@ int enqueue(pipejobqueue* pq, int argc, char* argv[]) {
     FREE_JOB:
     free(jb);
     fprintf(stderr, "failed to allocated memory for job %s", argv[0]);
-    return -1;
+    return MEM_ERR;
+
+    PIPE_FAIL:
+    return PIPE_ERR;
 }
 
 int executejob(pipejobqueue* pq) {
+    if (!pq->ready) goto EMPTY_FAIL;
+    int pid = fork();
+    if (pid == 0) {
+        dup2(pq->ready->fdin, STDIN_FILENO);
+        dup2(pq->ready->fdout, STDOUT_FILENO);
 
-    while (pq->ready) {
-
-        int pid = fork();
-        if (pid == 0) {
-            dup2(pq->ready->fdin, STDIN_FILENO);
-            dup2(pq->ready->fdout, STDOUT_FILENO);
-
-            if (-1 == execvp(pq->ready->argv[0], pq->ready->argv)) {
-                goto EXEC_FAIL;
+        /* we walk up from the end for no particular reason:
+        we just use the existing reference chain to our advantage */
+        while (pq->end) {
+            if (pq->end != pq->ready) {
+                close(pq->end->fdin);
+                close(pq->end->fdout);
             }
-        }
-        else if (pid > 0) {
-
-        }
-        else {
-            goto FORK_FAIL;
+            pq->end = pq->end->prev;
         }
 
-        pq->ready = pq->ready->next;
+        execvp(pq->ready->argv[0], pq->ready->argv);
+        // if exec fails we get here:
+        goto EXEC_FAIL;
     }
+    else if (pid > 0) {
+        close(pq->ready->fdin);
+        close(pq->ready->fdout);
+    }
+    else goto FORK_FAIL;
 
-    return 0;
+    pq->ready = pq->ready->next;
+    // free job?
+    return pid;
+
     EXEC_FAIL:
+    // 
+    exit(1);
+
     FORK_FAIL:
-    return -1;
+    return FORK_ERR;
+
+    EMPTY_FAIL:
+    return EMPTY_ERR;
 }
 
 int filein(pipejobqueue* pq, int fd);
