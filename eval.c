@@ -33,7 +33,7 @@ int eval(char** expr) {
 	}
 
 	// try built-in commands
-	if (0 == executeCommand(count, words)) {
+	if (exists(words[0])) {
 		freewords(words, count);
 		return SHELL_CMD_ERR;
 	}
@@ -69,6 +69,7 @@ int eval(char** expr) {
 		if (WEXITSTATUS(status) != 0) {
 			goto CHILD_ERROR;
 		}
+		goto CHILD_ERROR;
 	}
 	// write results to output buffer
 	int bytestotal = 0;

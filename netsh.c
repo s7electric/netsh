@@ -9,13 +9,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define STB_DS_IMPLEMENTATION
-#include "lib/stb_ds.h"
-
 int main(int argc, char** argv) {
 	/* Initialize built-in shell command lookup table */
-	Cmdtable *cmdlookup = NULL;
-	shput(cmdlookup, "cd", cd);
+	lookupTableInit();
 
 
 	char directory[PATH_MAX];
@@ -57,8 +53,11 @@ int main(int argc, char** argv) {
 		if (status == SHELL_CMD_ERR) {
 			int cmdargc;
 			char** cmdargv = getwords(expr, &cmdargc, ' ');
-			int commandloc = executeCommand(cmdargc, cmdargv);
-			cmdlookup[commandloc].value(cmdargc, cmdargv);
+
+			if	(runcmd(cmdargc, cmdargv));2
+			}
+			else fprintf(stderr, "");
+
 			freewords(cmdargv, cmdargc);
 		}
 	}

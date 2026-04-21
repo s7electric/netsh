@@ -3,7 +3,11 @@
 
 #define command(name) int name(int argc, char** argv);
 
-int exists(char* cmdname);
+void lookupTableInit();
+
+char exists(char* cmdname);
+
+void runcmd(int argc, char** argv);
 
 command(cd)
 

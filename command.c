@@ -4,6 +4,29 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#define STB_DS_IMPLEMENTATION
+#include "lib/stb_ds.h"
+
+struct cmdlookup {
+	char* key;
+	int (*value)(int, char**);
+};
+
+static struct cmdlookup* cmdlookup = NULL;
+
+void lookupTableInit() {
+	shput(cmdlookup, "cd", cd);
+
+}
+
+char exists(char* cmdname) {
+	
+}
+
+void runcmd(int argc, char** argv) {
+
+}
+
 int cd(int argc, char** argv) {
 	if (argc == 1) {
 			//handle cd to home

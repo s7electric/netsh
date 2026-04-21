@@ -8,9 +8,4 @@
 
 #define SHELL_CMD_ERR -67
 
-typedef struct {
-	char* key;
-	int (*value)(int, char**);
-} Cmdtable;
-
 #endif // netsh_h
