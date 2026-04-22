@@ -14,10 +14,8 @@
 #include <linux/limits.h>
 #include <fcntl.h>
 
-#define err(cause, GOTO) {perror(#cause); goto GOTO;}
-
 int eval(char** expr) {
-	char* out = malloc(sizeof(char) * getPipeMax());
+	char out[getPipeMax()];
 
 	int count;
 	char** words = getwords(*expr, &count, ' ');
@@ -40,7 +38,7 @@ int eval(char** expr) {
 
 	/* we should have a string with no subevaluations left (this is like the base case) e.g. "ls | grep ... | wc > file" */
 	int mainpipe[2];
-	if (-1 == pipe(mainpipe)) err(pipe, PIPE_FAIL);
+	if (-1 == pipe(mainpipe)) err(pipe, "%c", '\n', PIPE_FAIL);
 	pipejobqueue* pq = createQueue(mainpipe[1]);
 	char* tempargs[MAXARGS];
 	int argcounter = 0;
@@ -76,20 +74,21 @@ int eval(char** expr) {
 	int bytesread;
 	do {
 		bytesread = read(mainpipe[0], out+bytestotal, 1024); // 1024 because I think it's reasonable
-		if (bytesread == -1) err(read, READ_FAIL);
+		if (bytesread == -1) err(read, "read %d\n", mainpipe[0], READ_FAIL)
 		bytestotal += bytesread;
 	}
 	while (bytesread != 0);
 	out[bytestotal] = '\0';
 	
-	if (-1 == close(mainpipe[0])) err(close, CLOSE_FAIL)
+	if (-1 == close(mainpipe[0])) err(close, "close %d\n", mainpipe[0], CLOSE_FAIL)
 
-	char* temp = realloc(out, sizeof(char)*strlen(out));
-	if (!temp) err(realloc, MEM_FAIL);
-	out = temp;
+	char* temp = realloc(*expr, sizeof(char)*strlen(out));
+	if (!temp) err(realloc, "realloc %s\n", "*expr", MEM_FAIL)
+	else {
+		*expr = temp;
+		strncpy(*expr, out, sizeof(char)*strlen(out));
+	}
 
-	free(*expr);
-	*expr = out;
 	return 0;
 
 	CHILD_ERROR:

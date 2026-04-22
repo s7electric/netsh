@@ -6,8 +6,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#define err(cause, GOTO) {perror(#cause); goto GOTO;}
-
 struct pipejobqueue {
     struct job* ready;
     struct job* end;
@@ -95,12 +93,13 @@ int executejob(pipejobqueue* pq) {
     if (pid == 0) {
         /* we walk up from the end for no particular reason:
         we just use the existing reference chain to our advantage */
-        while (pq->end) {
-            if (pq->end != pq->ready) {
-                close(pq->end->fdin);
-                close(pq->end->fdout);
+        for (struct job* jobptr = pq->ready->next; jobptr != NULL; jobptr = jobptr->next) {
+            if (-1 == close(jobptr->fdin)) {
+                err(cause, "close %d", jobptr->fdin, CLOSE_FAIL)
             }
-            pq->end = pq->end->prev;
+            if (-1 == close(jobptr->fdout)) {
+                err(cause, "close %d", jobptr->fdin, CLOSE_FAIL)
+            }
         }
 
         dup2(pq->ready->fdin, STDIN_FILENO);
@@ -121,6 +120,9 @@ int executejob(pipejobqueue* pq) {
 
     FORK_FAIL:
     return FORK_ERR;
+
+    CLOSE_FAIL:
+    return CLOSE_ERR;
 
     EMPTY_FAIL:
     return EMPTY_ERR;

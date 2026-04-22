@@ -16,15 +16,19 @@ static struct cmdlookup* cmdlookup = NULL;
 
 void lookupTableInit() {
 	shput(cmdlookup, "cd", cd);
-
 }
 
 char exists(char* cmdname) {
-	
+	if (shgeti(cmdlookup, cmdname) == -1) {
+		return 0;
+	}
+	else {
+		return 1;
+	}
 }
 
 void runcmd(int argc, char** argv) {
-
+	shget(cmdlookup, argv[0])(argc, argv);
 }
 
 int cd(int argc, char** argv) {

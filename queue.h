@@ -5,6 +5,7 @@
 #define PIPE_ERR -3
 #define FORK_ERR -4
 #define EMPTY_ERR -5
+#define CLOSE_ERR -6
 
 typedef struct pipejobqueue pipejobqueue;
 
