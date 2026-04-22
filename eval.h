@@ -1,20 +1,5 @@
-#ifndef EVALH
-#define EVALH
-
-#define MAXARGLEN 30
-#define MAXARGS 15
-#define MAXLINE ((MAXARGLEN+1) * MAXARGS) //+1 for spaces
-#define EVALCHR '$'
-
-typedef struct pipejobqueue {
-    int fdin;
-    int fdout;
-    int argc;
-    char* argv[MAXARGS];
-    struct pipejobqueue * next;
-    struct pipejobqueue * prev;
-} pipejobqueue;
-
+#ifndef EVAL_H
+#define EVAL_H
 
 /*
 Create a list of individual space separated words, and store number of words in *count. Call freewords after use.
@@ -33,10 +18,10 @@ void freewords(char** wordlist, int len);
 
 /*
 Perform in-text replacement by evaluating the shell input.
-expr: string to evaluate as if it had been typed into the shell.
--> evaluated string as if it had come to stdout (must be freed)
+*expr will be freed and **expr will point to the result of the evaluation.
+expr: address of string to evaluate as if it had been typed into the shell.
 */
-char* eval(char* expr);
+int eval(char** expr);
 
 /*
 Set the size of pipe fd to the system maximum.
@@ -51,4 +36,4 @@ Get the system maximum size of a pipe.
 int getPipeMax();
 
 
-#endif
+#endif // eval_h

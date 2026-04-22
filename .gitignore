@@ -2,8 +2,8 @@
 
 # General allowances
 !*.*
-!*/*
-
+!/*/
+!
 # Special denials
 /tex/*
 *.o

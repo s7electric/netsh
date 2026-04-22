@@ -1,5 +1,5 @@
 FLAGS = -Wall -g
-OBJECTS = eval.o command.o
+OBJECTS = eval.o command.o queue.o
 NAME = netsh
 TEST = test
 

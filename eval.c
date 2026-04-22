@@ -1,6 +1,10 @@
 #define _GNU_SOURCE // for fcntl changing pipe size to system max
+
+#include "netsh.h"
 #include "eval.h"
+#include "queue.h"
 #include "command.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,141 +14,97 @@
 #include <linux/limits.h>
 #include <fcntl.h>
 
-#define try(func) if (-1 == (func)) {perror(#func); goto ERROR;}
-#define err(cause) {perror(#cause); goto ERROR;}
+int eval(char** expr) {
+	char out[getPipeMax()];
 
-
-char* eval(char* expr) {
-	char* out = malloc(sizeof(char) * getPipeMax());
-	if (out == NULL) err(malloc)
-	/*
-	1. tokenize expr
-	2. if subevaluations are found then strip ?() and recurseively replace word with evaluation
-	3. look for pipes etc ???
-	4. return the evaluated line
-	*/
-	// 1
 	int count;
-	char** words = getwords(expr, &count, ' ');
-	// 2: this is like the recursive case
+	char** words = getwords(*expr, &count, ' ');
+	/* this is like the recursive case */
 	for (int i = 0; i < count; i++) {
 		if (words[i][0] == EVALCHR) {
 			char subexpr[strlen(words[i])-2]; // -2 for the ?() and enough for \0
 			strncpy(subexpr, &words[i][2], strlen(words[i])-3); // strip ?()
-			subexpr[strlen(words[i]) - 3] = '\n';
 			subexpr[strlen(words[i]) - 2] = '\0';
-			free(words[i]);
-			words[i] = eval(subexpr);
+			eval(&words[i]);
 			// ^ THIS MAY CAUSE PROBLEMS SINCE THE EVALUATION MIGHT RESULT IN MULTIPLE TOKENS, WHICH WILL NOT BE ACCOUNTED FOR
 		}
 	}
 
 	// try built-in commands
-	if (0 == executeCommand(count, words)) {
+	if (exists(words[0])) {
 		freewords(words, count);
-		free(out);
-		return NULL;
+		return SHELL_CMD_ERR;
 	}
 
-	// 3: we should have a string with no subevaluations left (this is like the base case) e.g. "ls | grep ... | wc"
-	pipejobqueue* last = malloc(sizeof(pipejobqueue));
-	pipejobqueue* first = last;
-	first->fdin = STDIN_FILENO;
-	first->prev = NULL;
-	first->next = NULL;
-	first->argc = 0;
+	/* we should have a string with no subevaluations left (this is like the base case) e.g. "ls | grep ... | wc > file" */
+	int mainpipe[2];
+	if (-1 == pipe(mainpipe)) err(pipe, "%c", '\n', PIPE_FAIL);
+	pipejobqueue* pq = createQueue(mainpipe);
+	char* tempargs[MAXARGS];
+	int argcounter = 0;
 	for (int i = 0; i < count; i++) {
 		if (0 != strcmp(words[i], "|")) { // if not pipe
-			last->argv[last->argc] = calloc((MAXARGLEN+1), sizeof(char));
-			strncpy(last->argv[last->argc], words[i], MAXARGLEN);
-			last->argv[last->argc][MAXARGLEN] = '\0';
-			last->argc++;
+			tempargs[argcounter] = words[i];
+			argcounter++;
 		}
 		// else if redirection operators TBD
-		else { // if we encounter a pipe
-			last->argv[last->argc] = NULL;
-			// advance the queue pointer and assemble pipes
-			int p[2];
-			try(pipe(p))
-			setPipeMax(p[1]);
-			pipejobqueue* new = malloc(sizeof(pipejobqueue));
-			new->fdin = p[0];
-			new->prev = last;
-			new->next = NULL;
-			new->argc = 0;
-
-			last->next = new;
-			last->fdout = p[1];
-			last = new;
+		else { // if pipe
+			tempargs[argcounter] = NULL;
+			if (-1 == enqueue(pq, argcounter, tempargs)) goto ERROR;
+			argcounter = 0;
 		}
 	}
-	last->argv[last->argc] = NULL; // terminate final program argument list for exec()
+	tempargs[argcounter] = NULL;
+	if (-1 == enqueue(pq, argcounter, tempargs)) goto ERROR;
 
-	int mainpipe[2];
-	try(pipe(mainpipe))
-	last->fdout = mainpipe[1];
 	// job fork sequence
-	int pid;
-	while (first != NULL) {
-		try(pid = fork())
-		if (pid == 0) { // child (actual program)
-			// close all unused fds
-			// try(close(mainpipe[0]))
-			while (last != NULL) { // why did I implement this even; it's currently 9:14pm april 6th
-				if (last == first) { // close all the pipe fds from only the other programs
-				}
-				else if (last->fdin == STDIN_FILENO) {
-					if (-1 == close(last->fdout)) {
-						fprintf(stderr, "here\n");
-					}
-				}
-				else {
-					if (-1 == close(last->fdin)) {
-						fprintf(stderr, "here\n");
-					}
-					try(close(last->fdout))
-				}
-				last = last->prev;
-			}
-			try(dup2(first->fdin, STDIN_FILENO))
-			try(dup2(first->fdout, STDOUT_FILENO))
-			// execute this program in the chain
-			execvp(first->argv[0], first->argv);
-			exit(1);
-		}
-		first = first->next;
-	}
-	// close open pipe fds in parent
-	while (last != NULL) { // walk back up the queue to close and free everything
-		if (last->fdin != STDIN_FILENO) {
-			try(close(last->fdin))
-		}
-		try(close(last->fdout))
-		last = last->prev;
-	}
+	int pid = 0;
+	while (EMPTY_ERR != (pid = executejob(pq)));
 
 	int status;
 	waitpid(pid, &status, 0);
 	if (WIFEXITED(status)) {
 		if (WEXITSTATUS(status) != 0) {
-			goto ERROR;
+			goto CHILD_ERROR;
 		}
 	}
+
 	// write results to output buffer
 	int bytestotal = 0;
 	int bytesread;
 	do {
-		bytesread = read(mainpipe[0], out+bytestotal, 1024); // 1024 because I think it's reasonable
-		if (bytesread == -1) err(read);
+		bytesread = read(mainpipe[0], out+bytestotal, 512);
+		if (bytesread == -1) err(read, "read %d\n", mainpipe[0], READ_FAIL)
 		bytestotal += bytesread;
 	}
 	while (bytesread != 0);
-	return out;
+	out[bytestotal] = '\0';
+	
+	if (-1 == close(mainpipe[0])) err(close, "close %d\n", mainpipe[0], CLOSE_FAIL)
+
+	char* temp = realloc(*expr, bytestotal+1);
+	if (!temp) err(realloc, "realloc %s\n", "*expr", MEM_FAIL)
+	else {
+		*expr = temp;
+		strncpy(*expr, out, bytestotal+1);
+	}
+
+	return 0;
+
+	CHILD_ERROR:
+	fprintf(stderr, "child exited with status: %d\n", WEXITSTATUS(status));
+
+	MEM_FAIL:
+
+	CLOSE_FAIL:
+
+	READ_FAIL:
+
 	ERROR:
-	//free everything
+	PIPE_FAIL:
+	return -1;
+	// free everything
 	// free previous element FIX
-	free(out);
-	return NULL;
 }
 
 int getPipeMax() {
