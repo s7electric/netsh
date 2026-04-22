@@ -39,7 +39,7 @@ int eval(char** expr) {
 	/* we should have a string with no subevaluations left (this is like the base case) e.g. "ls | grep ... | wc > file" */
 	int mainpipe[2];
 	if (-1 == pipe(mainpipe)) err(pipe, "%c", '\n', PIPE_FAIL);
-	pipejobqueue* pq = createQueue(mainpipe[1]);
+	pipejobqueue* pq = createQueue(mainpipe);
 	char* tempargs[MAXARGS];
 	int argcounter = 0;
 	for (int i = 0; i < count; i++) {
@@ -67,13 +67,13 @@ int eval(char** expr) {
 		if (WEXITSTATUS(status) != 0) {
 			goto CHILD_ERROR;
 		}
-		goto CHILD_ERROR;
 	}
+
 	// write results to output buffer
 	int bytestotal = 0;
 	int bytesread;
 	do {
-		bytesread = read(mainpipe[0], out+bytestotal, 1024); // 1024 because I think it's reasonable
+		bytesread = read(mainpipe[0], out+bytestotal, 512);
 		if (bytesread == -1) err(read, "read %d\n", mainpipe[0], READ_FAIL)
 		bytestotal += bytesread;
 	}
@@ -82,11 +82,11 @@ int eval(char** expr) {
 	
 	if (-1 == close(mainpipe[0])) err(close, "close %d\n", mainpipe[0], CLOSE_FAIL)
 
-	char* temp = realloc(*expr, sizeof(char)*strlen(out));
+	char* temp = realloc(*expr, bytestotal+1);
 	if (!temp) err(realloc, "realloc %s\n", "*expr", MEM_FAIL)
 	else {
 		*expr = temp;
-		strncpy(*expr, out, sizeof(char)*strlen(out));
+		strncpy(*expr, out, bytestotal+1);
 	}
 
 	return 0;

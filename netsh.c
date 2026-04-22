@@ -24,7 +24,6 @@ int main(int argc, char** argv) {
 			perror("gethostname");
 		}
 
-		fflush(stdout);
 		printf("[%s][%s] %c>", hostname, directory, EVALCHR);
 		
 		char* expr = malloc(sizeof(char) * MAXLINE);
@@ -42,7 +41,10 @@ int main(int argc, char** argv) {
 
 			freewords(cmdargv, cmdargc);
 		}
-		
+		printf("%s", expr);
+
 		free(expr);
+		expr = NULL;
+		// sleep(1);
 	}
 }

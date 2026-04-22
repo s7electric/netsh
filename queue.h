@@ -9,10 +9,12 @@
 
 typedef struct pipejobqueue pipejobqueue;
 
-pipejobqueue* createQueue(int fdoutfinal);
+pipejobqueue* createQueue(int mainpipe[2]);
 
 int enqueue(pipejobqueue* pq, int argc, char* argv[]);
 
 int executejob(pipejobqueue* pq);
+
+int freequeue(pipejobqueue* pq);
 
 #endif // queue_h
