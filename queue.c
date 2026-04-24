@@ -41,9 +41,7 @@ int enqueue(pipejobqueue* pq, int argc, char** argv) {
 
     // allocate space for arguments
     for (int i = 0; i < argc; i++) {
-        jb->argv[i] = malloc(sizeof(char) * MAXARGLEN);
-        if (!jb->argv[i]) goto FREE_WORDS;
-        strncpy(jb->argv[i], argv[i], MAXARGLEN);
+        jb->argv[i] = argv[i];
     }
     
     jb->argv[argc] = NULL;
@@ -63,11 +61,6 @@ int enqueue(pipejobqueue* pq, int argc, char** argv) {
         pq->end = jb;
     }
     return 0;
-
-    FREE_WORDS:
-    for (int i = 0; jb->argv[i] != NULL; i++) {
-        free(jb->argv[i]);
-    }
 
     FREE_ARGV:
     free(jb->argv);
@@ -119,8 +112,10 @@ int executejob(pipejobqueue* pq) {
     }
     else err(fork, "forked %s", pq->ready->argv[0], FORK_FAIL);
 
+    struct job* temp = pq->ready;
     pq->ready = pq->ready->next;
-    // free job?
+    free(temp->argv);
+    free(temp);
     return pid;
 
     FORK_FAIL:
@@ -136,4 +131,7 @@ int executejob(pipejobqueue* pq) {
     return EMPTY_ERR;
 }
 
-int freeQueue(pipejobqueue* pq);
+int freequeue(pipejobqueue* pq) {
+    free(pq);
+    return 0;
+}

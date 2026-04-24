@@ -16,6 +16,7 @@ static struct cmdlookup* cmdlookup = NULL;
 
 void lookupTableInit() {
 	shput(cmdlookup, "cd", cd);
+	shput(cmdlookup, "exit", _exit_);
 }
 
 char exists(char* cmdname) {
@@ -47,4 +48,8 @@ int cd(int argc, char** argv) {
 		fprintf(stderr, "cd: usage: cd [directory]");
 		return -1;
 	}
+}
+
+int _exit_(int argc, char** argv) {
+	exit(0);
 }

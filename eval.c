@@ -68,6 +68,7 @@ int eval(char** expr) {
 			goto CHILD_ERROR;
 		}
 	}
+	freequeue(pq);
 
 	// write results to output buffer
 	int bytestotal = 0;
@@ -89,6 +90,7 @@ int eval(char** expr) {
 		strncpy(*expr, out, bytestotal+1);
 	}
 
+	freewords(words, count);
 	return 0;
 
 	CHILD_ERROR:
@@ -102,6 +104,7 @@ int eval(char** expr) {
 
 	ERROR:
 	PIPE_FAIL:
+	freewords(words, count);
 	return -1;
 	// free everything
 	// free previous element FIX

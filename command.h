@@ -10,5 +10,6 @@ char exists(char* cmdname);
 void runcmd(int argc, char** argv);
 
 command(cd)
+command(_exit_)
 
 #endif // command_h
