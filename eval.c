@@ -22,10 +22,11 @@ int eval(char** expr) {
 	/* this is like the recursive case */
 	for (int i = 0; i < count; i++) {
 		if (words[i][0] == EVALCHR) {
-			char subexpr[strlen(words[i])-2]; // -2 for the ?() and enough for \0
-			strncpy(subexpr, &words[i][2], strlen(words[i])-3); // strip ?()
-			subexpr[strlen(words[i]) - 2] = '\0';
-			eval(&words[i]);
+			char* newexpr = malloc(sizeof(char) * (strlen(words[i]) - 3));
+			strncpy(newexpr, words[i]+2, strlen(words[i])-3);
+			eval(&newexpr);
+			free(words[i]);
+			words[i] = newexpr;
 			// ^ THIS MAY CAUSE PROBLEMS SINCE THE EVALUATION MIGHT RESULT IN MULTIPLE TOKENS, WHICH WILL NOT BE ACCOUNTED FOR
 		}
 	}
@@ -71,6 +72,7 @@ int eval(char** expr) {
 	freequeue(pq);
 
 	// write results to output buffer
+	
 	int bytestotal = 0;
 	int bytesread;
 	do {
@@ -78,8 +80,10 @@ int eval(char** expr) {
 		if (bytesread == -1) err(read, "read %d\n", mainpipe[0], READ_FAIL)
 		bytestotal += bytesread;
 	}
-	while (bytesread != 0);
-	out[bytestotal] = '\0';
+	while (bytesread != 0 && bytestotal < sizeof(out));
+
+	if (out[bytestotal-1] == '\n') out[bytestotal-1] = '\0';
+	else out[bytestotal] = '\0';
 	
 	if (-1 == close(mainpipe[0])) err(close, "close %d\n", mainpipe[0], CLOSE_FAIL)
 
@@ -115,9 +119,7 @@ int getPipeMax() {
 	if (f == NULL) return -1;
 	int max;
 	fscanf(f, "%d", &max);
-	if (-1 == fclose(f)) {
-		return -1;
-	}
+	if (-1 == fclose(f)) return -1;
 	return max;
 }
 
@@ -135,36 +137,49 @@ void freewords(char** wordlist, int len) {
 	free(wordlist);
 }
 
-char** getwords(char* inputstr, int* argc, char delim) { // respects ?(...) as a single word
-	*argc = 0;
+char** getwords(char* inputstr, int* wordcountptr, char delim) { // respects ?(...) as a single word
+	*wordcountptr = 0;
 	char** argv = malloc(sizeof(char*) * MAXARGS);
 
 	int i = 0; // current place in string
 	int arglen = 0; // length of current argument
 
-	while (inputstr[i] != '\0' && *argc <= MAXARGS && i < MAXLINE) { // word loop
-		while (inputstr[i] != delim && inputstr[i] != '\n') { // consume all characters
+	while (inputstr[i] != '\0' && *wordcountptr <= MAXARGS && i < MAXLINE) { // word loop
+		while (inputstr[i] != delim && inputstr[i] != '\n' && inputstr[i] != '\0') { // consume all characters
 			if (inputstr[i] == EVALCHR) { // if ?( is found then jump to )
 				if (arglen != 0 || inputstr[i+1] != '(') { // only tokenize this if ?() is well formed
-					freewords(argv, *argc);
+					freewords(argv, *wordcountptr);
 					return NULL;
 				}
-				char* end = strchr(&inputstr[i+1], ')');
-				arglen = end - &inputstr[i] + 1;
-				i = end - inputstr + 1;
-				break;
+				else {
+					// char* end = strchr(&inputstr[i+1], ')');
+					char counter = 1;
+					// char* end = inputstr+1;
+					while (counter != 0) {
+						switch (*end) {
+							case '(': counter++;
+							case ')': counter--;
+							case '\n':
+								freewords(argv, *wordcountptr);
+								return NULL;
+						}
+					}
+					arglen = end - &inputstr[i+1];
+					i = end - inputstr + 1;
+					break;
+				}
 			}
 			i++;
 			arglen++;
 		}
-		argv[*argc] = malloc(sizeof(char) * (arglen+1));
+		argv[*wordcountptr] = malloc(sizeof(char) * (arglen+1));
 		for (int k = 0; k < arglen; k++) {
-			argv[*argc][k] = inputstr[i-arglen+k];
+			argv[*wordcountptr][k] = inputstr[i-arglen+k];
 		}
-		argv[*argc][arglen] = '\0';
+		argv[*wordcountptr][arglen] = '\0';
 		arglen = 0;
 
-		*argc += 1;
+		*wordcountptr += 1;
 		while (inputstr[i] == delim) i++; //consume spaces between args
 		if (inputstr[i] == '\n') break; //remove this later to add multiline commands
 	}

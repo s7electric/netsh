@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
 
 			freewords(cmdargv, cmdargc);
 		}
-		printf("%s", expr);
+		printf("%s\n", expr);
 
 		free(expr);
 		expr = NULL;
